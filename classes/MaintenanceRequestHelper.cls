@@ -7,13 +7,15 @@ public class MaintenanceRequestHelper {
     private static final String CLOSED = 'Closed';
     private static final String REPAIR = 'Repair';
     private static final String ROUTINE_MAINTENANCE = 'Routine Maintenance';
-    private static List<Work_Part__c> allWorkParts;
+    private static List<Work_Part__c> requestWorkParts;
     
     public static void updateWorkOrders(Map<Id, Case> oldMaintenanceRequestMap, Map<Id, Case> newMaintenanceRequestMap) {
-        allWorkParts = new List<Work_Part__c>();
+        requestWorkParts = new List<Work_Part__c>();
         Map<Id, Case> oldIdNewRequest = new Map<Id, Case>();
         List<Case> insertCaseList  = new List<Case>();
-
+        List<Work_Part__c> allWorkParts = [SELECT Maintenance_Request__c, Equipment__r.Maintenance_Cycle__c 
+                                           FROM Work_Part__c 
+                                           WHERE Maintenance_Request__c =: oldMaintenanceRequestMap.keySet()];
         for (Id oldRequestId : oldMaintenanceRequestMap.keySet()) {
             Case oldRequest = oldMaintenanceRequestMap.get(oldRequestId);
             Case newRequest = newMaintenanceRequestMap.get(oldRequestId);
@@ -21,7 +23,7 @@ public class MaintenanceRequestHelper {
                  (newRequest.Status == CLOSED) &&
                  ( (oldRequest.Type == REPAIR) || (oldRequest.Type == ROUTINE_MAINTENANCE) ) ) {
                 
-                Case newMaintenanceRequest = createNewRequest(oldRequest, calculateMaintenanceCycle(oldRequestId));
+                Case newMaintenanceRequest = createNewRequest(oldRequest, calculateMaintenanceCycle(oldRequestId, allWorkParts));
                 oldIdNewRequest.put(oldRequestId, newMaintenanceRequest);
                 insertCaseList.add(newMaintenanceRequest);
             }
@@ -29,21 +31,22 @@ public class MaintenanceRequestHelper {
 
         insert insertCaseList; 
 
-        for (Work_Part__c workPart : allWorkParts) {
+        for (Work_Part__c workPart : requestWorkParts) {
             workPart.Maintenance_Request__c = oldIdNewRequest.get(workPart.Maintenance_Request__c).Id;
         } 
         update allWorkParts;  
     }
 
-    private static Date calculateMaintenanceCycle(Id oldRequestId) {
-        List<Work_Part__c> workParts = [SELECT Maintenance_Request__c, Equipment__r.Maintenance_Cycle__c 
-                                        FROM Work_Part__c 
-                                        WHERE Maintenance_Request__c =: oldRequestId];
-        allWorkParts.addAll(workParts);
+    private static Date calculateMaintenanceCycle(Id oldRequestId, List<Work_Part__c> allWorkParts) {
+        for(Work_Part__c wp : allWorkParts) {
+            if (wp.Maintenance_Request__c == oldRequestId) {
+                requestWorkParts.add(wp);
+            }
+        }
         List<Decimal> maintenanceCycleDays = new List<Decimal>();
         Integer shortestMaintenanceCycleDay = 0;
-        if (workParts.size() > 0) {
-            for (Work_Part__c wp : workParts) {
+        if (requestWorkParts.size() > 0) {
+            for (Work_Part__c wp : allWorkParts) {
                 maintenanceCycleDays.add(wp.Equipment__r.Maintenance_Cycle__c);
             }
             maintenanceCycleDays.sort();
