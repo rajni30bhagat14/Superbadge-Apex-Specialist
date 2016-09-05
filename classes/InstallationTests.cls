@@ -9,6 +9,7 @@ private class InstallationTests {
     private static final String REQUEST_ORIGIN = 'Web';
     private static final String REQUEST_TYPE = 'Routine Maintenance';
     private static final String REQUEST_SUBJECT = 'AMC Spirit';
+    public static String CRON_EXP = '0 0 1 * * ?';
 
 
     static testmethod void testMaintenanceRequestPositive() {
@@ -114,9 +115,20 @@ private class InstallationTests {
         System.assert(workParts.size() == 0);
     }
 
-    //static testmethod void testWarehouseSync() {
-        //WarehouseCalloutService.runWarehouseEquipmentSync();
-    //}    
+    static testmethod void testWarehouseSync() {
+        Test.setMock(HttpCalloutMock.class, new WarehouseCalloutServiceMock());
+        Test.startTest();
+        String jobId = System.schedule('WarehouseSyncSchedule',
+                                       CRON_EXP, 
+                                       new WarehouseSyncSchedule());   
+        CronTrigger ct = [SELECT Id, CronExpression, TimesTriggered, NextFireTime
+                          FROM CronTrigger
+                          WHERE id = :jobId];
+
+        System.assertEquals(CRON_EXP, ct.CronExpression);
+        System.assertEquals(0, ct.TimesTriggered);
+        Test.stopTest();
+    }    
 
 
     private static Vehicle__c createVehicle() {
